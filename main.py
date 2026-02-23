@@ -1,9 +1,11 @@
+import argparse
+import sys
+
+import black
 import ollama
 import os
 import shutil
 import subprocess
-
-import black
 
 PROJECT_NAME = "BugHunter"
 DEV_MODEL = "qwen2.5-coder:7b"
@@ -12,6 +14,7 @@ LOG_FILE = "bughunter_log.txt"
 RESULT_FILE = "solution.py"
 MAX_ITERATIONS = 10
 MAX_LINE_LENGTH = 88
+DEFAULT_TASK = "Write a function that returns the sum of a list of numbers. Use a docstring and PEP 8."
 
 def run_linter(filename):
     """Run flake8 on the file. Returns linter errors or 'LINTER: OK'. Handles missing flake8."""
@@ -92,7 +95,8 @@ def save_final_code(code):
     with open(RESULT_FILE, "w", encoding="utf-8") as f:
         f.write(clean_code)
 
-def start_hunt(task, test_call=None):
+def start_hunt(task, test_call=None, max_iters=5, model_name=None):
+    dev_model = model_name if model_name is not None else DEV_MODEL
     if os.path.exists(LOG_FILE): os.remove(LOG_FILE)
     print(f"🕵️‍♂️ {PROJECT_NAME} is on the hunt...")
     save_to_log(f"TARGET TASK: {task}")
@@ -121,7 +125,7 @@ def start_hunt(task, test_call=None):
         "• PEP 8: Two blank lines before each def; no trailing spaces; one blank line at end of file."
     )
 
-    for i in range(MAX_ITERATIONS):
+    for i in range(max_iters):
         if i > 0:
             prev_lines = len(current_code.strip().splitlines())
             print(f"\n--- Iteration {i} (fix round) ---")
@@ -141,7 +145,7 @@ def start_hunt(task, test_call=None):
         else:
             pep8_block = ""
 
-        print(f"\n🛠 [{i}] {DEV_MODEL.upper()} generating solution...")
+        print(f"\n🛠 [{i}] {dev_model.upper()} generating solution...")
         
         dev_user_content = (
             task if i == 0
@@ -158,7 +162,7 @@ def start_hunt(task, test_call=None):
             )
         )
         response = ollama.chat(
-            model=DEV_MODEL,
+            model=dev_model,
             messages=[
                 {'role': 'system', 'content': dev_system_content},
                 {'role': 'user', 'content': dev_user_content}
@@ -216,10 +220,50 @@ def start_hunt(task, test_call=None):
             else:
                 print(f"⚠️ Issue found, sending for revision.")
     else:
-        print(f"\n⚠️ Reached {MAX_ITERATIONS} attempts without full pass. Task may be too complex for current setup.")
+        print(f"\n⚠️ Reached {max_iters} attempts without full pass. Task may be too complex for current setup.")
 
     print(f"\n🏆 Hunt completed! Final code in {RESULT_FILE}, logs in {LOG_FILE}")
 
+def _build_parser():
+    parser = argparse.ArgumentParser(
+        prog="BugHunter",
+        description="Generate and refine Python code from a task description using LLM (DEV + QA) and linter.",
+        epilog=(
+            "Examples:\n"
+            "  python main.py \"Write a function that returns the sum of a list\"\n"
+            "  python main.py \"Implement factorial(n)\" -i 10 --model llama3\n"
+            "  python main.py \"Parse CSV and return dict\" --iters 3"
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    parser.add_argument(
+        "task",
+        type=str,
+        nargs="?",
+        default=DEFAULT_TASK,
+        help="Task description for code generation (default: sum-of-list example).",
+    )
+    parser.add_argument(
+        "-i", "--iters",
+        type=int,
+        default=5,
+        metavar="N",
+        help="Maximum number of iterations (default: 5).",
+    )
+    parser.add_argument(
+        "--model",
+        type=str,
+        default=None,
+        metavar="NAME",
+        help="Ollama model name for the developer (default: qwen2.5-coder:7b).",
+    )
+    return parser
+
+
 if __name__ == "__main__":
-    task_to_solve = "Write a self-contained Python function generate_cipher_report that sets random.seed(42) internally, generates a list of 15 random integers between 10 and 50, creates a new list by iterating through the original (excluding the first and last elements) to include only those whose neighbors' sum is even (doubling such numbers) or odd (keeping them as is), and returns a formatted string containing the first five original numbers, the full refined list, and their total sum."
-    start_hunt(task_to_solve)
+    parser = _build_parser()
+    args = parser.parse_args()
+    task = (args.task or "").strip() or DEFAULT_TASK
+    task_preview = task[:60] + "..." if len(task) > 60 else task
+    print(f"BugHunter: Starting task \"{task_preview}\" with model {args.model or DEV_MODEL} (Max iters: {args.iters})")
+    start_hunt(task, max_iters=args.iters, model_name=args.model)
