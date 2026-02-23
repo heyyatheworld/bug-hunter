@@ -1,0 +1,3 @@
+ollama
+black
+PyYAML

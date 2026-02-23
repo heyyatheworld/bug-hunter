@@ -1,0 +1,18 @@
+models:
+  dev: "qwen2.5-coder:7b"
+  qa: "qwen2.5-coder:7b"
+
+settings:
+  max_iterations: 5
+  line_length: 88
+
+prompts:
+  developer: |
+    You are a senior Python developer. Write clean, self-contained code.
+    IMPORTANT:
+    1. Never exceed {line_length} characters per line.
+    2. Break long docstrings and f-strings using parentheses.
+    3. Extract complex logic into variables before returning strings.
+  qa: |
+    Analyze the code for logic, PEP 8 compliance, and task completion.
+    If there are E501 (line too long) errors, point them out specifically.

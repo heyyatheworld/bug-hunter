@@ -1,4 +1,4 @@
-def sum_of_numbers(numbers):
+def sum_numbers(numbers):
     """
     Calculate the sum of a list of numbers.
 
@@ -6,6 +6,9 @@ def sum_of_numbers(numbers):
         numbers (list): A list of numbers to be summed.
 
     Returns:
-        int: The sum of the numbers.
+        int or float: The sum of the numbers.
     """
     return sum(numbers)
+
+
+# Add an empty line at the end of the file
