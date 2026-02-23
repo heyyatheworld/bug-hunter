@@ -21,18 +21,24 @@ from ui_utils import (
     info,
     iteration_header,
     iteration_progress,
+    log_background,
+    panel_ai_assistant,
+    parse_linter_to_bug_rows,
     result_panel,
     show_banner,
-    status_spinner,
+    start_background_logger,
+    status_llm_thinking,
     step_result,
+    stop_background_logger,
     success,
+    table_bugs,
     warning,
 )
 
 PROJECT_NAME = "BugHunter"
 LOG_FILE = "bughunter_log.txt"
 RESULT_FILE = "solution.py"
-DEFAULT_TASK = "Write a function that returns the sum of a list of numbers. Use a docstring and PEP 8."
+DEFAULT_TASK = "Write a function that counts Fibonacci numbers up to the tenth number. Use a docstring and PEP 8."
 CONFIG_FILENAME = "config.yml"
 
 
@@ -78,8 +84,7 @@ class BugHunter:
         self.prompt_qa = qa_tpl
 
     def _log(self, text: str) -> None:
-        with open(LOG_FILE, "a", encoding="utf-8") as f:
-            f.write(text + "\n" + "=" * 50 + "\n")
+        log_background(text)
 
     def _run_linter(self, filename: str) -> str:
         if not shutil.which("flake8"):
@@ -145,8 +150,6 @@ class BugHunter:
             f.write(clean)
 
     def hunt(self, task: str, test_call: str | None = None) -> None:
-        if os.path.exists(LOG_FILE):
-            os.remove(LOG_FILE)
         success(f"{PROJECT_NAME} is on the hunt...")
         self._log(f"TARGET TASK: {task}")
 
@@ -184,7 +187,7 @@ class BugHunter:
                 )
 
                 dev_qa_line(i, self.dev_model, "generating")
-                with status_spinner("[bold green]DEV model generating code..."):
+                with status_llm_thinking("LLM генерирует код..."):
                     response = ollama.chat(
                         model=self.dev_model,
                         messages=[
@@ -198,6 +201,7 @@ class BugHunter:
                 raw = response["message"]["content"]
                 current_code = self._apply_black(self._strip_markdown(raw))
                 self._save_solution(current_code)
+                panel_ai_assistant(current_code[:2000] + ("..." if len(current_code) > 2000 else ""), role="DEV", as_code=True)
 
                 linter_result = self._run_linter(RESULT_FILE)
                 linter_ok = linter_result.strip() == "LINTER: OK" or "not installed, skipped" in linter_result
@@ -220,7 +224,7 @@ class BugHunter:
 
                 feedback_data = f"TASK:\n{task}\n\nCODE:\n{current_code}\n\nLINTER:\n{linter_result}\n\nRUNTIME:\n{execution_result}"
                 dev_qa_line(i, self.qa_model, "analyzing")
-                with status_spinner("[bold green]QA model analyzing..."):
+                with status_llm_thinking("LLM анализирует код..."):
                     qa_response = ollama.chat(
                         model=self.qa_model,
                         messages=[
@@ -231,6 +235,15 @@ class BugHunter:
                     )
                 feedback = qa_response["message"]["content"]
                 qa_pass = "PASS" in feedback.upper()
+                panel_ai_assistant(feedback[:1500] + ("..." if len(feedback) > 1500 else ""), role="QA", as_code=False)
+                bug_rows = parse_linter_to_bug_rows(linter_result)
+                bug_rows.append((
+                    "QA Verdict",
+                    "—",
+                    "PASS" if qa_pass else "ISSUES",
+                    feedback[:120] + ("..." if len(feedback) > 120 else ""),
+                ))
+                table_bugs(bug_rows)
                 if qa_pass:
                     success("QA: PASS")
                 else:
@@ -276,14 +289,18 @@ def _build_parser() -> argparse.ArgumentParser:
 
 if __name__ == "__main__":
     show_banner(PROJECT_NAME)
-    config = load_config()
-    parser = _build_parser()
-    args = parser.parse_args()
-    task = (args.task or "").strip() or DEFAULT_TASK
-    max_iters = getattr(args, "iters", None)
-    model = getattr(args, "model", None)
+    start_background_logger(LOG_FILE, clear=True)
+    try:
+        config = load_config()
+        parser = _build_parser()
+        args = parser.parse_args()
+        task = (args.task or "").strip() or DEFAULT_TASK
+        max_iters = getattr(args, "iters", None)
+        model = getattr(args, "model", None)
 
-    hunter = BugHunter(config, dev_model_override=model, max_iters_override=max_iters)
-    preview = task[:60] + "..." if len(task) > 60 else task
-    info(f"Starting \"{preview}\" | model={hunter.dev_model} | max_iters={hunter.max_iters}")
-    hunter.hunt(task)
+        hunter = BugHunter(config, dev_model_override=model, max_iters_override=max_iters)
+        preview = task[:60] + "..." if len(task) > 60 else task
+        info(f"Starting \"{preview}\" | model={hunter.dev_model} | max_iters={hunter.max_iters}")
+        hunter.hunt(task)
+    finally:
+        stop_background_logger()
