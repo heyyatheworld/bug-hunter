@@ -13,6 +13,22 @@ import black
 import ollama
 import yaml
 
+from ui_utils import (
+    dev_qa_line,
+    error,
+    final_result_panel,
+    final_summary,
+    info,
+    iteration_header,
+    iteration_progress,
+    result_panel,
+    show_banner,
+    status_spinner,
+    step_result,
+    success,
+    warning,
+)
+
 PROJECT_NAME = "BugHunter"
 LOG_FILE = "bughunter_log.txt"
 RESULT_FILE = "solution.py"
@@ -30,12 +46,12 @@ def load_config(path: str | None = None) -> dict:
         base = os.path.dirname(os.path.abspath(__file__))
         path = os.path.join(base, CONFIG_FILENAME)
     if not os.path.isfile(path):
-        print(f"Error: Config file not found: {path}", file=sys.stderr)
+        error(f"Config file not found: {path}")
         sys.exit(1)
     with open(path, "r", encoding="utf-8") as f:
         data = yaml.safe_load(f)
     if not data:
-        print("Error: Config file is empty.", file=sys.stderr)
+        error("Config file is empty.")
         sys.exit(1)
     return data
 
@@ -131,7 +147,7 @@ class BugHunter:
     def hunt(self, task: str, test_call: str | None = None) -> None:
         if os.path.exists(LOG_FILE):
             os.remove(LOG_FILE)
-        print(f"🕵️‍♂️ {PROJECT_NAME} is on the hunt...")
+        success(f"{PROJECT_NAME} is on the hunt...")
         self._log(f"TARGET TASK: {task}")
 
         current_code = ""
@@ -139,90 +155,106 @@ class BugHunter:
         linter_result = ""
         execution_result = ""
         linter_ok = True
+        achieved = False
 
-        for i in range(self.max_iters):
-            if i > 0:
-                print(f"\n--- Iteration {i} (fix round) ---")
-                print(f"  Linter (last): {linter_result[:80]}..." if len(linter_result) > 80 else f"  Linter (last): {linter_result}")
-                print(f"  Runtime (last): {execution_result[:80]}..." if len(execution_result) > 80 else f"  Runtime (last): {execution_result}")
-                print(f"  QA: {feedback[:120]}..." if len(feedback) > 120 else f"  QA: {feedback}")
+        with iteration_progress(self.max_iters, "Iterations") as (progress, task_id):
+            for i in range(self.max_iters):
+                if i > 0:
+                    iteration_header(
+                        i,
+                        linter_result[:80] + "..." if len(linter_result) > 80 else linter_result,
+                        execution_result[:80] + "..." if len(execution_result) > 80 else execution_result,
+                        feedback[:120] + "..." if len(feedback) > 120 else feedback,
+                    )
 
-            dev_system = self.prompt_developer
-            if i > 0:
-                dev_system += "\n\nFix the code below. Output ONLY Python code (no explanations)."
-            if i > 0 and not linter_ok:
-                dev_system += f"\n\nPEP8 errors to fix:\n{linter_result}\n"
+                dev_system = self.prompt_developer
+                if i > 0:
+                    dev_system += "\n\nFix the code below. Output ONLY Python code (no explanations)."
+                if i > 0 and not linter_ok:
+                    dev_system += f"\n\nPEP8 errors to fix:\n{linter_result}\n"
 
-            dev_user = (
-                task
-                if i == 0
-                else (
-                    f"QA feedback:\n{feedback}\n\n"
-                    f"Linter:\n{linter_result}\n\nRuntime:\n{execution_result}\n\n"
-                    f"Code to fix:\n{current_code}"
+                dev_user = (
+                    task
+                    if i == 0
+                    else (
+                        f"QA feedback:\n{feedback}\n\n"
+                        f"Linter:\n{linter_result}\n\nRuntime:\n{execution_result}\n\n"
+                        f"Code to fix:\n{current_code}"
+                    )
                 )
-            )
 
-            print(f"\n🛠 [{i}] {self.dev_model.upper()} generating...")
-            response = ollama.chat(
-                model=self.dev_model,
-                messages=[
-                    {"role": "system", "content": dev_system},
-                    {"role": "user", "content": dev_user},
-                ],
-                options={"temperature": 0},
-            )
+                dev_qa_line(i, self.dev_model, "generating")
+                with status_spinner("[bold green]DEV model generating code..."):
+                    response = ollama.chat(
+                        model=self.dev_model,
+                        messages=[
+                            {"role": "system", "content": dev_system},
+                            {"role": "user", "content": dev_user},
+                        ],
+                        options={"temperature": 0},
+                    )
 
-            code_before = current_code
-            raw = response["message"]["content"]
-            current_code = self._apply_black(self._strip_markdown(raw))
-            self._save_solution(current_code)
+                code_before = current_code
+                raw = response["message"]["content"]
+                current_code = self._apply_black(self._strip_markdown(raw))
+                self._save_solution(current_code)
 
-            linter_result = self._run_linter(RESULT_FILE)
-            linter_ok = linter_result.strip() == "LINTER: OK" or "not installed, skipped" in linter_result
+                linter_result = self._run_linter(RESULT_FILE)
+                linter_ok = linter_result.strip() == "LINTER: OK" or "not installed, skipped" in linter_result
 
-            if i > 0 and current_code == code_before and not linter_ok:
-                print("\n⚠️ Agent Stuck in Loop: code unchanged and linter still fails. Stopping.")
-                print(f"Linter:\n{linter_result}")
-                self._log(f"Agent Stuck in Loop\nLINTER:\n{linter_result}")
-                break
-            if i > 0 and current_code == code_before:
-                qa_pass_prev = "PASS" in feedback.upper()
-                if qa_pass_prev:
-                    print("\n⚠️ Agent Stuck in Loop: code unchanged (QA had passed). Stopping.")
-                    self._log("Agent Stuck in Loop (same code, QA had passed)")
+                if i > 0 and current_code == code_before and not linter_ok:
+                    error("Agent Stuck in Loop: code unchanged and linter still fails. Stopping.")
+                    result_panel(linter_result, title="Linter output")
+                    self._log(f"Agent Stuck in Loop\nLINTER:\n{linter_result}")
                     break
+                if i > 0 and current_code == code_before:
+                    qa_pass_prev = "PASS" in feedback.upper()
+                    if qa_pass_prev:
+                        warning("Agent Stuck in Loop: code unchanged (QA had passed). Stopping.")
+                        self._log("Agent Stuck in Loop (same code, QA had passed)")
+                        break
 
-            execution_result = self._run_generated_code(RESULT_FILE, test_append=test_call)
-            runtime_ok = execution_result.startswith("SUCCESS")
-            print(f"  DEV: {len(current_code.strip().splitlines())} lines | Linter: {'OK' if linter_ok else 'ISSUES'} | Runtime: {'OK' if runtime_ok else 'ERROR'}")
+                execution_result = self._run_generated_code(RESULT_FILE, test_append=test_call)
+                runtime_ok = execution_result.startswith("SUCCESS")
+                step_result(len(current_code.strip().splitlines()), linter_ok, runtime_ok)
 
-            feedback_data = f"TASK:\n{task}\n\nCODE:\n{current_code}\n\nLINTER:\n{linter_result}\n\nRUNTIME:\n{execution_result}"
-            print(f"🔍 [{i}] {self.qa_model.upper()} analyzing...")
-            qa_response = ollama.chat(
-                model=self.qa_model,
-                messages=[
-                    {"role": "system", "content": self.prompt_qa},
-                    {"role": "user", "content": feedback_data},
-                ],
-                options={"temperature": 0},
-            )
-            feedback = qa_response["message"]["content"]
-            qa_pass = "PASS" in feedback.upper()
-            print(f"  QA: {'PASS' if qa_pass else 'issues'}")
-            self._log(f"ITERATION {i}\nCODE:\n{current_code}\nLINTER:\n{linter_result}\nRUNTIME:\n{execution_result}\nQA:\n{feedback}")
+                feedback_data = f"TASK:\n{task}\n\nCODE:\n{current_code}\n\nLINTER:\n{linter_result}\n\nRUNTIME:\n{execution_result}"
+                dev_qa_line(i, self.qa_model, "analyzing")
+                with status_spinner("[bold green]QA model analyzing..."):
+                    qa_response = ollama.chat(
+                        model=self.qa_model,
+                        messages=[
+                            {"role": "system", "content": self.prompt_qa},
+                            {"role": "user", "content": feedback_data},
+                        ],
+                        options={"temperature": 0},
+                    )
+                feedback = qa_response["message"]["content"]
+                qa_pass = "PASS" in feedback.upper()
+                if qa_pass:
+                    success("QA: PASS")
+                else:
+                    warning("QA: issues")
 
-            if qa_pass and linter_ok and i > 0:
-                print("\n🎯 Target achieved!")
-                break
-            if not linter_ok:
-                print("⚠️ Linter issues — sending for revision.")
+                self._log(f"ITERATION {i}\nCODE:\n{current_code}\nLINTER:\n{linter_result}\nRUNTIME:\n{execution_result}\nQA:\n{feedback}")
+
+                progress.update(task_id, advance=1)
+
+                if qa_pass and linter_ok and i > 0:
+                    achieved = True
+                    success("Target achieved!")
+                    break
+                if not linter_ok:
+                    warning("Linter issues — sending for revision.")
+                else:
+                    warning("QA found issues — sending for revision.")
             else:
-                print("⚠️ QA found issues — sending for revision.")
-        else:
-            print(f"\n⚠️ Reached {self.max_iters} iterations without full pass.")
+                warning(f"Reached {self.max_iters} iterations without full pass.")
 
-        print(f"\n🏆 Done. Output: {RESULT_FILE}, logs: {LOG_FILE}")
+        final_summary(RESULT_FILE, LOG_FILE, achieved)
+        if os.path.isfile(RESULT_FILE):
+            with open(RESULT_FILE, "r", encoding="utf-8") as f:
+                final_result_panel(f.read(), title=f"Final result — {RESULT_FILE}")
 
 
 # ---------------------------------------------------------------------------
@@ -243,6 +275,7 @@ def _build_parser() -> argparse.ArgumentParser:
 
 
 if __name__ == "__main__":
+    show_banner(PROJECT_NAME)
     config = load_config()
     parser = _build_parser()
     args = parser.parse_args()
@@ -252,5 +285,5 @@ if __name__ == "__main__":
 
     hunter = BugHunter(config, dev_model_override=model, max_iters_override=max_iters)
     preview = task[:60] + "..." if len(task) > 60 else task
-    print(f"BugHunter: Starting \"{preview}\" | model={hunter.dev_model} | max_iters={hunter.max_iters}")
+    info(f"Starting \"{preview}\" | model={hunter.dev_model} | max_iters={hunter.max_iters}")
     hunter.hunt(task)

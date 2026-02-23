@@ -1,3 +1,4 @@
 ollama
 black
 PyYAML
+rich
