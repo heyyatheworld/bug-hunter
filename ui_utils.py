@@ -105,12 +105,12 @@ def error(msg: str) -> None:
     console.print(f"[error]{msg}[/error]")
 
 
-def status_spinner(msg: str = "Обработка..."):
+def status_spinner(msg: str = "Processing..."):
     """Context manager for long-running task with spinner."""
     return console.status(f"[bold green]{msg}[/bold green]", spinner="dots")
 
 
-def status_llm_thinking(msg: str = "LLM анализирует код..."):
+def status_llm_thinking(msg: str = "LLM analyzing code..."):
     """Context manager for LLM request/response: purple 'thinking' spinner."""
     return console.status(f"[bold purple]{msg}[/bold purple]", spinner="dots")
 
@@ -156,7 +156,8 @@ def result_panel(content: str, title: str = "Output") -> None:
     console.print(Panel(content, title=title, border_style="green"))
 
 
-CODE_THEME = "monokai"  # or "one-dark" if available
+CODE_THEME = "monokai"
+
 
 def code_snippet(code: str, language: str = "python", line_numbers: bool = True) -> None:
     """Print syntax-highlighted code (theme: monokai)."""
@@ -164,15 +165,15 @@ def code_snippet(code: str, language: str = "python", line_numbers: bool = True)
     console.print(syn)
 
 
-def table_bugs(rows: list[tuple[str, str, str, str]], title: str = "Найденные баги / Анализ QA") -> None:
-    """Table: Тип ошибки, Строка, Уровень критичности (AI Score), Рекомендация."""
+def table_bugs(rows: list[tuple[str, str, str, str]], title: str = "Found issues / QA analysis") -> None:
+    """Table: Error type, Line, Severity (AI Score), Recommendation."""
     if not rows:
         return
     table = Table(title=title, show_header=True, header_style="bold magenta")
-    table.add_column("Тип ошибки", style="cyan")
-    table.add_column("Строка", justify="right")
-    table.add_column("Уровень критичности (AI Score)", style="yellow")
-    table.add_column("Рекомендация", style="dim")
+    table.add_column("Error type", style="cyan")
+    table.add_column("Line", justify="right")
+    table.add_column("Severity (AI Score)", style="yellow")
+    table.add_column("Recommendation", style="dim")
     for r in rows:
         table.add_row(*r)
     console.print(table)
@@ -187,7 +188,6 @@ def parse_linter_to_bug_rows(linter_output: str) -> list[tuple[str, str, str, st
         line = line.strip()
         if not line:
             continue
-        # e.g. "solution.py:12:1: E501 line too long"
         parts = line.split(":", 3)
         err_type = ""
         line_no = ""
@@ -201,7 +201,7 @@ def parse_linter_to_bug_rows(linter_output: str) -> list[tuple[str, str, str, st
                 severity = "high"
             rows.append((err_type or "style", line_no, severity, rest[:80] + ("..." if len(rest) > 80 else "")))
         else:
-            rows.append(("—", "—", "—", line[:80]))
+            rows.append(("-", "-", "-", line[:80]))
     return rows
 
 

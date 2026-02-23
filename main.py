@@ -1,7 +1,4 @@
-"""
-BugHunter — CLI for LLM-based code generation with linter and QA feedback.
-All entrypoint logic runs under if __name__ == "__main__".
-"""
+"""BugHunter: CLI for LLM-based code generation with linter and QA feedback."""
 
 import argparse
 import os
@@ -42,10 +39,6 @@ DEFAULT_TASK = "Write a function that counts Fibonacci numbers up to the tenth n
 CONFIG_FILENAME = "config.yml"
 
 
-# ---------------------------------------------------------------------------
-# Config
-# ---------------------------------------------------------------------------
-
 def load_config(path: str | None = None) -> dict:
     """Load YAML config. path defaults to config.yml next to script or in cwd. Raises if missing."""
     if path is None:
@@ -61,10 +54,6 @@ def load_config(path: str | None = None) -> dict:
         sys.exit(1)
     return data
 
-
-# ---------------------------------------------------------------------------
-# BugHunter
-# ---------------------------------------------------------------------------
 
 class BugHunter:
     """Orchestrates code generation, formatting, linting, and QA feedback loop."""
@@ -187,7 +176,7 @@ class BugHunter:
                 )
 
                 dev_qa_line(i, self.dev_model, "generating")
-                with status_llm_thinking("LLM генерирует код..."):
+                with status_llm_thinking("LLM generating code..."):
                     response = ollama.chat(
                         model=self.dev_model,
                         messages=[
@@ -224,7 +213,7 @@ class BugHunter:
 
                 feedback_data = f"TASK:\n{task}\n\nCODE:\n{current_code}\n\nLINTER:\n{linter_result}\n\nRUNTIME:\n{execution_result}"
                 dev_qa_line(i, self.qa_model, "analyzing")
-                with status_llm_thinking("LLM анализирует код..."):
+                with status_llm_thinking("LLM analyzing code..."):
                     qa_response = ollama.chat(
                         model=self.qa_model,
                         messages=[
@@ -239,7 +228,7 @@ class BugHunter:
                 bug_rows = parse_linter_to_bug_rows(linter_result)
                 bug_rows.append((
                     "QA Verdict",
-                    "—",
+                    "-",
                     "PASS" if qa_pass else "ISSUES",
                     feedback[:120] + ("..." if len(feedback) > 120 else ""),
                 ))
@@ -258,21 +247,17 @@ class BugHunter:
                     success("Target achieved!")
                     break
                 if not linter_ok:
-                    warning("Linter issues — sending for revision.")
+                    warning("Linter issues - sending for revision.")
                 else:
-                    warning("QA found issues — sending for revision.")
+                    warning("QA found issues - sending for revision.")
             else:
                 warning(f"Reached {self.max_iters} iterations without full pass.")
 
         final_summary(RESULT_FILE, LOG_FILE, achieved)
         if os.path.isfile(RESULT_FILE):
             with open(RESULT_FILE, "r", encoding="utf-8") as f:
-                final_result_panel(f.read(), title=f"Final result — {RESULT_FILE}")
+                final_result_panel(f.read(), title=f"Final result: {RESULT_FILE}")
 
-
-# ---------------------------------------------------------------------------
-# CLI
-# ---------------------------------------------------------------------------
 
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
