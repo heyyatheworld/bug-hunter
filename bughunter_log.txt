@@ -1,59 +1,67 @@
-TARGET TASK: Write a function analyze_text(text) that returns a dictionary containing the total word count, the most frequent word, and a frequency map of all words ≥ 3 characters, ignoring case and punctuation.
+TARGET TASK: Write a self-contained Python function generate_cipher_report that sets random.seed(42) internally, generates a list of 15 random integers between 10 and 50, creates a new list by iterating through the original (excluding the first and last elements) to include only those whose neighbors' sum is even (doubling such numbers) or odd (keeping them as is), and returns a formatted string containing the first five original numbers, the full refined list, and their total sum.
 ==================================================
 ITERATION 0
 CODE:
-```
-import re
-from collections import Counter
+import random
 
-def analyze_text(text):
-    text = re.sub(r'[^\w\s]', '', text).lower()
-    word_count = len(text.split())
-    most_frequent_word = Counter(text.split()).most_common(1)[0][0]
-    frequency_map = {word: count for word, count in Counter(text.split()).items() if len(word) >= 3}
-    
-    return {
-        'total_word_count': word_count,
-        'most_frequent_word': most_frequent_word,
-        'frequency_map': frequency_map
-    }
-```
+
+def generate_cipher_report():
+    random.seed(42)
+    original_numbers = [random.randint(10, 50) for _ in range(15)]
+
+    refined_list = []
+    for i in range(1, len(original_numbers) - 1):
+        if (original_numbers[i - 1] + original_numbers[i + 1]) % 2 == 0:
+            refined_list.append(original_numbers[i] * 2)
+        else:
+            refined_list.append(original_numbers[i])
+
+    total_sum = sum(refined_list)
+
+    return (
+        f"First five original numbers: {original_numbers[:5]}\n"
+        f"Refined list: {refined_list}\n"
+        f"Total sum of refined list: {total_sum}"
+    )
+
+
+# Example usage:
+print(generate_cipher_report())
+
 LINTER:
-LINTER: flake8 not installed, skipped.
+LINTER:
+solution.py:25:32: W292 no newline at end of file
 RUNTIME:
 SUCCESS. Output:
+First five original numbers: [50, 17, 11, 27, 25]
+Refined list: [17, 22, 54, 25, 24, 36, 32, 44, 15, 94, 37, 24, 11]
+Total sum of refined list: 435
 
 QA FEEDBACK:
-PASS
+1. The function `generate_cipher_report` should set `random.seed(42)` internally.
+   - **CHECK**: The code sets `random.seed(42)` at the beginning of the function.
+
+2. The function should generate a list of 15 random integers between 10 and 50.
+   - **CHECK**: The code generates a list of 15 random integers using `[random.randint(10, 50) for _ in range(15)]`.
+
+3. The function should create a new list by iterating through the original (excluding the first and last elements) to include only those whose neighbors' sum is even (doubling such numbers) or odd (keeping them as is).
+   - **CHECK**: The code correctly iterates through the original list, excluding the first and last elements, and applies the condition based on the sum of neighbors.
+
+4. The function should return a formatted string containing the first five original numbers, the full refined list, and their total sum.
+   - **CHECK**: The code returns a formatted string with the required information.
+
+5. The output should include the first five original numbers, the full refined list, and their total sum.
+   - **CHECK**: The runtime result includes all the required elements in the output.
+
+6. There should be no linter/runtime errors.
+   - **CHECK**: The linter result shows a warning about no newline at the end of the file, but it does not indicate any errors or issues that would prevent the function from running correctly.
+
+**Final Result: PASS**
+
+All requirements are met, and there are no linter/runtime errors.
 ==================================================
-ITERATION 1
-CODE:
-```
-import re
-from collections import Counter
-
-def analyze_text(text):
-    text = re.sub(r'[^\w\s]', '', text).lower()
-    word_count = len(text.split())
-    
-    if word_count == 0:
-        most_frequent_word = ''
-    else:
-        most_frequent_word = Counter(text.split()).most_common(1)[0][0]
-        
-    frequency_map = {word: count for word, count in Counter(text.split()).items() if len(word) >= 3}
-    
-    return {
-        'total_word_count': word_count,
-        'most_frequent_word': most_frequent_word,
-        'frequency_map': frequency_map
-    }
-```
+STUCK_IN_LOOP
 LINTER:
-LINTER: flake8 not installed, skipped.
-RUNTIME:
-SUCCESS. Output:
-
-QA FEEDBACK:
-PASS
+LINTER:
+solution.py:25:32: W292 no newline at end of file
 ==================================================

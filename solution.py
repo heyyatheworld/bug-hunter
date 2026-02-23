@@ -1,19 +1,25 @@
-import re
-from collections import Counter
+import random
 
-def analyze_text(text):
-    text = re.sub(r'[^\w\s]', '', text).lower()
-    word_count = len(text.split())
-    
-    if word_count == 0:
-        most_frequent_word = ''
-    else:
-        most_frequent_word = Counter(text.split()).most_common(1)[0][0]
-        
-    frequency_map = {word: count for word, count in Counter(text.split()).items() if len(word) >= 3}
-    
-    return {
-        'total_word_count': word_count,
-        'most_frequent_word': most_frequent_word,
-        'frequency_map': frequency_map
-    }
+
+def generate_cipher_report():
+    random.seed(42)
+    original_numbers = [random.randint(10, 50) for _ in range(15)]
+
+    refined_list = []
+    for i in range(1, len(original_numbers) - 1):
+        if (original_numbers[i - 1] + original_numbers[i + 1]) % 2 == 0:
+            refined_list.append(original_numbers[i] * 2)
+        else:
+            refined_list.append(original_numbers[i])
+
+    total_sum = sum(refined_list)
+
+    return (
+        f"First five original numbers: {original_numbers[:5]}\n"
+        f"Refined list: {refined_list}\n"
+        f"Total sum of refined list: {total_sum}"
+    )
+
+
+# Example usage:
+print(generate_cipher_report())
