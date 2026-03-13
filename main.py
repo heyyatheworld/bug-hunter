@@ -2,6 +2,7 @@
 
 import argparse
 import os
+import re
 import shutil
 import socket
 import subprocess
@@ -189,19 +190,21 @@ class BugHunter:
             return code
 
     def _strip_markdown(self, code: str) -> str:
+        """Extract Python code from the first ```python ... ``` block, or strip generic fences."""
+        match = re.search(r"```python\\s*(.*?)```", code, re.DOTALL | re.IGNORECASE)
+        if match:
+            return match.group(1).strip()
+
         s = code.strip()
-        if s.startswith("```"):
-            lines = s.splitlines()
-            if lines and lines[0].startswith("```"):
-                lines = lines[1:]
-            if lines and lines[-1].strip() == "```":
-                lines = lines[:-1]
-            s = "\n".join(lines)
+        if s.startswith("```") and s.endswith("```"):
+            s = s[3:-3]
         return s.replace("```python", "").replace("```", "").strip()
 
     def _save_solution(self, code: str) -> None:
-        """Save code to RESULT_FILE: strip Markdown then write (code must already be Black-formatted)."""
+        """Save code to RESULT_FILE: strip Markdown and ensure trailing newline."""
         clean = self._strip_markdown(code)
+        if not clean.endswith("\n"):
+            clean = clean + "\n"
         with open(RESULT_FILE, "w", encoding="utf-8") as f:
             f.write(clean)
 
