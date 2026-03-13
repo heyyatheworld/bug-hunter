@@ -92,24 +92,74 @@ class BugHunter:
             return f"LINTER ERROR: {e}"
 
     def _run_generated_code(self, filename: str, test_append: str | None = None) -> str:
+        """Run generated code in a Docker sandbox; optionally fall back to local Python."""
+
+        def _run_local() -> str:
+            try:
+                result = subprocess.run(
+                    ["python", filename],
+                    capture_output=True,
+                    text=True,
+                    timeout=5,
+                )
+                if result.returncode == 0:
+                    return f"SUCCESS. Output:\n{result.stdout}"
+                return f"RUNTIME ERROR:\n{result.stderr}"
+            except subprocess.TimeoutExpired:
+                return "EXECUTION TIMEOUT (local)"
+            except Exception as exc:  # noqa: BLE001
+                return f"EXECUTION FAILED (local): {exc}"
+
         content_orig = None
         if test_append:
             with open(filename, "r", encoding="utf-8") as f:
                 content_orig = f.read()
             with open(filename, "w", encoding="utf-8") as f:
                 f.write(content_orig + "\n" + test_append.strip() + "\n")
+
+        abs_path = os.path.abspath(filename)
+        docker_cmd = [
+            "docker",
+            "run",
+            "--rm",
+            "--network",
+            "none",
+            "--memory=128m",
+            "--cpus=0.5",
+            "-v",
+            f"{abs_path}:/app/solution.py:ro",
+            "python:3.11-slim",
+            "python",
+            "/app/solution.py",
+        ]
+
         try:
-            result = subprocess.run(
-                ["python", filename],
-                capture_output=True,
-                text=True,
-                timeout=5,
-            )
+            if shutil.which("docker") is None:
+                warning("Docker is not available on PATH, falling back to local execution.")
+                return _run_local()
+
+            try:
+                result = subprocess.run(
+                    docker_cmd,
+                    capture_output=True,
+                    text=True,
+                    timeout=5,
+                )
+            except subprocess.TimeoutExpired:
+                return "EXECUTION TIMEOUT (Docker sandbox)"
+
             if result.returncode == 0:
                 return f"SUCCESS. Output:\n{result.stdout}"
-            return f"RUNTIME ERROR:\n{result.stderr}"
-        except Exception as e:
-            return f"EXECUTION FAILED: {str(e)}"
+
+            stderr = result.stderr or ""
+            if "Cannot connect to the Docker daemon" in stderr or "docker: command not found" in stderr:
+                warning("Docker daemon is not running or unreachable, falling back to local execution.")
+                return _run_local()
+
+            return f"RUNTIME ERROR:\n{stderr or result.stdout}"
+        except Exception as exc:  # noqa: BLE001
+            warning(f"Docker execution failed ({exc}), falling back to local execution.")
+            return _run_local()
         finally:
             if content_orig is not None:
                 with open(filename, "w", encoding="utf-8") as f:
@@ -118,7 +168,7 @@ class BugHunter:
     def _apply_black(self, code: str) -> str:
         try:
             return black.format_str(code, mode=black.FileMode(line_length=self.line_length))
-        except black.NothingChanged:
+        except (black.NothingChanged, black.parsing.InvalidInput):
             return code
 
     def _strip_markdown(self, code: str) -> str:

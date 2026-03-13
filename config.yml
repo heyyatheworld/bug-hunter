@@ -1,6 +1,6 @@
 models:
-  dev: "qwen2.5-coder:7b"
-  qa: "qwen2.5-coder:7b"
+  dev: "qwen2.5-coder:3b"
+  qa: "qwen2.5-coder:3b"
 
 settings:
   max_iterations: 5
