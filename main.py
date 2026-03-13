@@ -339,6 +339,14 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("task", type=str, nargs="?", default=DEFAULT_TASK, help="Task description.")
     parser.add_argument("-i", "--iters", type=int, default=None, metavar="N", help="Override max iterations from config.")
     parser.add_argument("--model", type=str, default=None, metavar="NAME", help="Override DEV model from config.")
+    parser.add_argument(
+        "-t",
+        "--test",
+        type=str,
+        default=None,
+        metavar="PYCODE",
+        help="Python code to append at the end of the script for testing (e.g., \"print(my_func(10))\").",
+    )
     return parser
 
 
@@ -352,10 +360,11 @@ if __name__ == "__main__":
         task = (args.task or "").strip() or DEFAULT_TASK
         max_iters = getattr(args, "iters", None)
         model = getattr(args, "model", None)
+        test_call = getattr(args, "test", None)
 
         hunter = BugHunter(config, dev_model_override=model, max_iters_override=max_iters)
         preview = task[:60] + "..." if len(task) > 60 else task
         info(f"Starting \"{preview}\" | model={hunter.dev_model} | max_iters={hunter.max_iters}")
-        hunter.hunt(task)
+        hunter.hunt(task, test_call=test_call)
     finally:
         stop_background_logger()
