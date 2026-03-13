@@ -119,9 +119,11 @@ class BugHunter:
             content_orig = f.read()
 
         env_check_snippet = (
+            "# --- BUGHUNTER DEBUG START ---\n"
             "import os, socket\n"
             "print(f'--- ENVIRONMENT CHECK: Is Docker? {os.path.exists(\"/.dockerenv\")} | "
-            "{socket.gethostname()} ---')"
+            "{socket.gethostname()} ---')\n"
+            "# --- BUGHUNTER DEBUG END ---"
         )
 
         with open(filename, "w", encoding="utf-8") as f:
@@ -326,6 +328,10 @@ class BugHunter:
                     warning("QA found issues - sending for revision.")
             else:
                 warning(f"Reached {self.max_iters} iterations without full pass.")
+
+        if achieved:
+            final_clean = self._apply_black(current_code)
+            self._save_solution(final_clean)
 
         final_summary(RESULT_FILE, LOG_FILE, achieved)
         if os.path.isfile(RESULT_FILE):
