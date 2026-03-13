@@ -3,6 +3,7 @@
 import argparse
 import os
 import shutil
+import socket
 import subprocess
 import sys
 
@@ -106,16 +107,26 @@ class BugHunter:
                     return f"SUCCESS. Output:\n{result.stdout}"
                 return f"RUNTIME ERROR:\n{result.stderr}"
             except subprocess.TimeoutExpired:
+                self._log("ERROR: Local execution timed out after 5 seconds")
                 return "EXECUTION TIMEOUT (local)"
             except Exception as exc:  # noqa: BLE001
                 return f"EXECUTION FAILED (local): {exc}"
 
-        content_orig = None
-        if test_append:
-            with open(filename, "r", encoding="utf-8") as f:
-                content_orig = f.read()
-            with open(filename, "w", encoding="utf-8") as f:
-                f.write(content_orig + "\n" + test_append.strip() + "\n")
+        # Always append an environment check, optionally followed by a test call.
+        content_orig: str | None = None
+        with open(filename, "r", encoding="utf-8") as f:
+            content_orig = f.read()
+
+        env_check_snippet = (
+            "import os, socket\n"
+            "print(f'--- ENVIRONMENT CHECK: Is Docker? {os.path.exists(\"/.dockerenv\")} | "
+            "{socket.gethostname()} ---')"
+        )
+
+        with open(filename, "w", encoding="utf-8") as f:
+            f.write(content_orig.rstrip() + "\n" + env_check_snippet + "\n")
+            if test_append:
+                f.write(test_append.strip() + "\n")
 
         abs_path = os.path.abspath(filename)
         docker_cmd = [
@@ -138,15 +149,21 @@ class BugHunter:
                 warning("Docker is not available on PATH, falling back to local execution.")
                 return _run_local()
 
+            self._log(f"DEBUG: Running Docker command: {' '.join(docker_cmd)}")
+
             try:
                 result = subprocess.run(
                     docker_cmd,
                     capture_output=True,
                     text=True,
-                    timeout=5,
+                    timeout=15,
                 )
             except subprocess.TimeoutExpired:
+                self._log("ERROR: Container execution timed out after 15 seconds")
                 return "EXECUTION TIMEOUT (Docker sandbox)"
+
+            self._log(f"DOCKER STDOUT: {result.stdout}")
+            self._log(f"DOCKER STDERR: {result.stderr}")
 
             if result.returncode == 0:
                 return f"SUCCESS. Output:\n{result.stdout}"
