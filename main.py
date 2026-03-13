@@ -190,15 +190,19 @@ class BugHunter:
             return code
 
     def _strip_markdown(self, code: str) -> str:
-        """Extract Python code from the first ```python ... ``` block, or strip generic fences."""
-        match = re.search(r"```python\\s*(.*?)```", code, re.DOTALL | re.IGNORECASE)
+        """Extract Python code from markdown fences produced by the LLM."""
+        # 1) Try to extract the first ```python ... ``` block (case-insensitive)
+        match = re.search(r"```python\s*(.*?)```", code, re.DOTALL | re.IGNORECASE)
         if match:
             return match.group(1).strip()
 
-        s = code.strip()
-        if s.startswith("```") and s.endswith("```"):
-            s = s[3:-3]
-        return s.replace("```python", "").replace("```", "").strip()
+        # 2) Fallback: extract the first generic ``` ... ``` block (any language or none)
+        match = re.search(r"```\s*(.*?)```", code, re.DOTALL)
+        if match:
+            return match.group(1).strip()
+
+        # 3) No fenced blocks at all: return cleaned original text
+        return code.strip()
 
     def _save_solution(self, code: str) -> None:
         """Save code to RESULT_FILE: strip Markdown and ensure trailing newline."""
