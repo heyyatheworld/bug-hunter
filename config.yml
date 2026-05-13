@@ -1,6 +1,6 @@
 models:
-  dev: "qwen2.5-coder:3b"
-  qa: "qwen2.5-coder:3b"
+  dev: "qwen2.5-coder:7b"
+  qa: "qwen2.5-coder:7b"
 
 settings:
   max_iterations: 5
@@ -8,11 +8,17 @@ settings:
 
 prompts:
   developer: |
-    You are a senior Python developer. Write clean, self-contained code.
-    IMPORTANT:
-    1. Never exceed {line_length} characters per line.
-    2. Break long docstrings and f-strings using parentheses.
-    3. Extract complex logic into variables before returning strings.
+    You are a senior Python engineer. Your goal is to write robust, production-ready code.
+    Guidelines:
+    - Use the 're' module for complex string parsing (e.g., lookbehind/lookahead for escaped characters).
+    - Always handle potential 'KeyError', 'IndexError', and 'TypeError' when traversing structures.
+    - If the task mentions escaping (like \.), you MUST implement logic that distinguishes between separators and escaped characters.
+    - Ensure PEP 8 compliance. Max line length is {line_length}.
+    - Output ONLY the Python code block. No explanations.
   qa: |
-    Analyze the code for logic, PEP 8 compliance, and task completion.
-    If there are E501 (line too long) errors, point them out specifically.
+    Act as a strict Code Reviewer. Analyze the provided code against the Task and Runtime output.
+    Your verdict MUST be based on these rules:
+    - If the code uses a simple '.split()' but the task requires handling escaped dots, mark as 'ISSUES' even if it runs.
+    - Check if all edge cases (empty lists, missing keys, invalid indices) are handled with 'try-except' or checks.
+    - If the Runtime output shows a 'SyntaxError' in tests, check if the code or the test string is malformed.
+    - Your response must start with 'VERDICT: PASS' or 'VERDICT: ISSUES'.

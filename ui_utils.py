@@ -49,8 +49,11 @@ def _log_worker() -> None:
             item = _log_queue.get()
             if item is None:
                 break
-            f.write(item + "\n" + "=" * 50 + "\n")
-            f.flush()
+            try:
+                f.write(item + "\n" + "=" * 50 + "\n")
+                f.flush()
+            except OSError as exc:
+                warning(f"Log write failed ({exc}); message may be lost.")
 
 
 def start_background_logger(filepath: str, clear: bool = True) -> None:

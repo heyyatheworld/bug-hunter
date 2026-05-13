@@ -10,12 +10,21 @@ CLI tool for automatic Python code generation and verification using two LLMs: o
 4. **Execution** — generated code is saved to `solution.py` and run:
    - **Docker** (default): `python:3.11-slim`, read-only mount of `solution.py`, `--network none`, `--memory=128m`, `--cpus=0.5`, `--rm`. A temporary env check and optional test snippet are injected only for the run; the file is restored afterward so `solution.py` stays clean.
    - **Local fallback** — if Docker is not installed or the daemon is unreachable, code runs with the local Python (with the same temporary injection and restoration).
-5. **QA** — second model receives task, code, linter and runtime output; returns PASS or a list of issues.
+5. **QA** — second model receives task, code, linter and runtime output; should start the verdict with `VERDICT: PASS` or `VERDICT: ISSUES` (see `config.yml`). The app parses that line when present.
 6. **Iterations** — QA and linter feedback are sent back to DEV for fixes; cycle repeats (limit set in config or via `-i`).
 7. **Anti-loop** — if the model returns identical code while linter or QA still report issues, the loop stops ("Agent Stuck in Loop").
 8. **Final cleanup** — when the target is achieved, `solution.py` is overwritten with only the approved code (Black-formatted, no debug or test snippets).
 
 LLM output is normalized: the first ` ```python ... ``` ` block is extracted with a regex so extra text before/after does not end up in the file. Iteration logs are written to **bughunter_log.txt** in the background; the Rich UI is shown in the console.
+
+**QA verdict** — if the QA response contains `VERDICT: PASS` or `VERDICT: ISSUES` (case-insensitive), that line decides success; otherwise the tool falls back to detecting `PASS` in the text (legacy).
+
+## Execution timeouts
+
+- **Docker sandbox**: subprocess timeout **15 seconds** (infinite loops or slow I/O in the container).
+- **Local fallback** (when Docker is missing or unreachable): **5 seconds**.
+
+These differ because container startup adds overhead; local runs are meant to fail fast.
 
 ## Requirements
 

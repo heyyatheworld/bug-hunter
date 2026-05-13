@@ -37,7 +37,13 @@ from ui_utils import (
 PROJECT_NAME = "BugHunter"
 LOG_FILE = "bughunter_log.txt"
 RESULT_FILE = "solution.py"
-DEFAULT_TASK = "Write a function that counts Fibonacci numbers up to the tenth number. Use a docstring and PEP 8."
+DEFAULT_TASK = (
+    "Implement a function 'resolve_path(obj: dict, path: str, default=None)' "
+    "that navigates nested dicts and lists using dot-notation, supports "
+    "escaped dots like 'key\\.with\\.dot' via regex, handles list indices, "
+    "and returns 'default' on any missing key or IndexError, all while "
+    "strictly following PEP 8."
+)
 CONFIG_FILENAME = "config.yml"
 
 
@@ -55,6 +61,14 @@ def load_config(path: str | None = None) -> dict:
         error("Config file is empty.")
         sys.exit(1)
     return data
+
+
+def qa_verdict_passes(feedback: str) -> bool:
+    """True if QA accepted the solution. Prefers VERDICT: PASS|ISSUES when present; else legacy PASS substring."""
+    m = re.search(r"VERDICT:\s*(PASS|ISSUES)\b", feedback, re.IGNORECASE)
+    if m:
+        return m.group(1).upper() == "PASS"
+    return "PASS" in feedback.upper()
 
 
 class BugHunter:
@@ -277,7 +291,7 @@ class BugHunter:
                     self._log(f"Agent Stuck in Loop\nLINTER:\n{linter_result}")
                     break
                 if i > 0 and current_code == code_before:
-                    qa_pass_prev = "PASS" in feedback.upper()
+                    qa_pass_prev = qa_verdict_passes(feedback)
                     if qa_pass_prev:
                         warning("Agent Stuck in Loop: code unchanged (QA had passed). Stopping.")
                         self._log("Agent Stuck in Loop (same code, QA had passed)")
@@ -299,7 +313,7 @@ class BugHunter:
                         options={"temperature": 0},
                     )
                 feedback = qa_response["message"]["content"]
-                qa_pass = "PASS" in feedback.upper()
+                qa_pass = qa_verdict_passes(feedback)
                 panel_ai_assistant(feedback[:1500] + ("..." if len(feedback) > 1500 else ""), role="QA", as_code=False)
                 bug_rows = parse_linter_to_bug_rows(linter_result)
                 bug_rows.append((
