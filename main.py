@@ -4,7 +4,6 @@ import argparse
 import os
 import re
 import shutil
-import socket
 import subprocess
 import sys
 
@@ -13,6 +12,7 @@ import ollama
 import yaml
 
 from ui_utils import (
+    demo_section,
     dev_qa_line,
     error,
     final_result_panel,
@@ -38,12 +38,24 @@ PROJECT_NAME = "BugHunter"
 LOG_FILE = "bughunter_log.txt"
 RESULT_FILE = "solution.py"
 DEFAULT_TASK = (
-    "Implement a function 'resolve_path(obj: dict, path: str, default=None)' "
-    "that navigates nested dicts and lists using dot-notation, supports "
-    "escaped dots like 'key\\.with\\.dot' via regex, handles list indices, "
-    "and returns 'default' on any missing key or IndexError, all while "
-    "strictly following PEP 8."
+    "Write a function add(a, b) that returns the sum of two numbers. "
+    "Use a short docstring and PEP 8."
 )
+
+PRESET_TASKS = {
+    "sum": DEFAULT_TASK,
+    "fibo": (
+        "Write a function first_n_fibonacci(n: int) that returns a list of the "
+        "first n Fibonacci numbers (n >= 1). Use a docstring and PEP 8."
+    ),
+    "path": (
+        "Implement a function 'resolve_path(obj: dict, path: str, default=None)' "
+        "that navigates nested dicts and lists using dot-notation, supports "
+        "escaped dots like 'key\\.with\\.dot' via regex, handles list indices, "
+        "and returns 'default' on any missing key or IndexError, all while "
+        "strictly following PEP 8."
+    ),
+}
 CONFIG_FILENAME = "config.yml"
 
 
@@ -74,8 +86,15 @@ def qa_verdict_passes(feedback: str) -> bool:
 class BugHunter:
     """Orchestrates code generation, formatting, linting, and QA feedback loop."""
 
-    def __init__(self, config: dict, dev_model_override: str | None = None, max_iters_override: int | None = None):
+    def __init__(
+        self,
+        config: dict,
+        dev_model_override: str | None = None,
+        max_iters_override: int | None = None,
+        demo_mode: bool = False,
+    ):
         self.config = config
+        self.demo_mode = demo_mode
         models = config.get("models") or {}
         settings = config.get("settings") or {}
         self.dev_model = dev_model_override or models.get("dev") or "qwen2.5-coder:7b"
@@ -241,6 +260,8 @@ class BugHunter:
 
         with iteration_progress(self.max_iters, "Iterations") as (progress, task_id):
             for i in range(self.max_iters):
+                if self.demo_mode and i > 0:
+                    demo_section(f"Iteration {i}")
                 if i > 0:
                     iteration_header(
                         i,
@@ -357,12 +378,31 @@ def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="BugHunter",
         description="Generate and refine Python code from a task (config: config.yml).",
-        epilog="Examples:\n  python main.py \"sum of list\"\n  python main.py \"factorial\" -i 10 --model llama3",
+        epilog=(
+            "Examples:\n"
+            "  python main.py\n"
+            "  python main.py \"sum of list\"\n"
+            "  python main.py --preset fibo --demo\n"
+            "  python main.py \"factorial\" -i 10 --model llama3"
+        ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    parser.add_argument("task", type=str, nargs="?", default=DEFAULT_TASK, help="Task description.")
+    parser.add_argument("task", type=str, nargs="?", default=None, help="Task description (optional if --preset is used).")
     parser.add_argument("-i", "--iters", type=int, default=None, metavar="N", help="Override max iterations from config.")
     parser.add_argument("--model", type=str, default=None, metavar="NAME", help="Override DEV model from config.")
+    parser.add_argument(
+        "--preset",
+        type=str,
+        choices=sorted(PRESET_TASKS.keys()),
+        default=None,
+        metavar="NAME",
+        help="Use a built-in demo task: sum (short), fibo (medium), path (hard). Overrides positional task.",
+    )
+    parser.add_argument(
+        "--demo",
+        action="store_true",
+        help="Presentation mode: section rules between iterations and short pauses for readability.",
+    )
     parser.add_argument(
         "-t",
         "--test",
@@ -381,12 +421,23 @@ if __name__ == "__main__":
         config = load_config()
         parser = _build_parser()
         args = parser.parse_args()
-        task = (args.task or "").strip() or DEFAULT_TASK
+        if args.preset:
+            task = PRESET_TASKS[args.preset]
+            if (args.task or "").strip():
+                info("Using --preset; ignoring positional task argument.")
+        else:
+            task = (args.task or "").strip() or DEFAULT_TASK
         max_iters = getattr(args, "iters", None)
         model = getattr(args, "model", None)
         test_call = getattr(args, "test", None)
+        demo_mode = bool(getattr(args, "demo", False))
 
-        hunter = BugHunter(config, dev_model_override=model, max_iters_override=max_iters)
+        hunter = BugHunter(
+            config,
+            dev_model_override=model,
+            max_iters_override=max_iters,
+            demo_mode=demo_mode,
+        )
         preview = task[:60] + "..." if len(task) > 60 else task
         info(f"Starting \"{preview}\" | model={hunter.dev_model} | max_iters={hunter.max_iters}")
         hunter.hunt(task, test_call=test_call)

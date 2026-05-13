@@ -100,7 +100,9 @@ If `config.yml` is missing or empty, the script exits with an error.
 python main.py
 ```
 
-Without arguments, the default task is used (e.g. Fibonacci example).
+Without arguments, the default task is a short one (implement `add(a, b)`). Use **`--preset`** for built-in demos: `sum` (same as default), `fibo` (Fibonacci list), `path` (nested dict path resolver). If you pass both a positional task and **`--preset`**, the preset wins and the positional task is ignored (with an info message).
+
+**`--demo`** turns on presentation mode: Rich section rules between iterations and a short pause so output is easier to follow when presenting or recording.
 
 Custom task as positional argument:
 
@@ -112,7 +114,9 @@ Flags override config:
 
 | Argument | Description |
 |----------|-------------|
-| `task` | Task description (optional positional). |
+| `task` | Task description (optional positional; default is a short `add(a, b)` task). |
+| `--preset NAME` | Built-in task: `sum`, `fibo`, or `path`. Overrides positional `task` when set. |
+| `--demo` | Presentation mode: section dividers between iterations and short pauses. |
 | `-i`, `--iters N` | Max iterations (overrides `settings.max_iterations`). |
 | `--model NAME` | Ollama model for DEV (overrides `models.dev`). |
 | `-t`, `--test PYCODE` | Python code to append at the end of the script for testing (e.g. `print(my_func(10))`). Injected only during execution; not saved to `solution.py`. |
@@ -120,6 +124,9 @@ Flags override config:
 Examples:
 
 ```bash
+python main.py
+python main.py --preset fibo --demo
+python main.py --preset path -i 8
 python main.py "Sum of a list of numbers"
 python main.py "Factorial" -i 10 --model llama3
 python main.py "Write a sum function" --test "print(sum(5, 5))"

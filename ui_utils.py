@@ -6,6 +6,7 @@ Logging to file runs in a background thread.
 
 import queue
 import threading
+import time
 from contextlib import contextmanager
 
 from rich.console import Console
@@ -90,6 +91,12 @@ def show_banner(title: str = "BugHunter") -> None:
         padding=(0, 2),
     )
     console.print(banner)
+
+
+def demo_section(title: str, pause_s: float = 0.75) -> None:
+    """Presentation mode: section divider and short pause between iterations."""
+    console.rule(f"[bold dim italic]{title}[/]", style="dim")
+    time.sleep(pause_s)
 
 
 def success(msg: str) -> None:
