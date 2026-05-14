@@ -39,7 +39,17 @@ These differ because container startup adds overhead; local runs are meant to fa
 pip install -r requirements.txt
 ```
 
-Dependencies: `ollama`, `black`, `PyYAML`, `rich`.
+Dependencies: `ollama`, `black`, `PyYAML`, `rich`, `pytest` (for the test suite in `tests/`).
+
+## Tests
+
+From the project root, with dependencies installed (recommended: virtual environment and `pip install -r requirements.txt`):
+
+```bash
+python -m pytest tests/
+```
+
+If your `venv` uses a different Python than the `pip` you invoked, use the same interpreter for both install and test, for example `.venv/bin/python -m pip install -r requirements.txt` then `.venv/bin/python -m pytest tests/`.
 
 With a virtual environment:
 
@@ -158,3 +168,4 @@ python main.py "Parse CSV into dict" --iters 3
 - **main.py** — config load, argparse, `BugHunter` class (Docker/local execution, regex extraction, final clean write), entry point under `if __name__ == "__main__"`.
 - **ui_utils.py** — Rich console, status spinners, panels (including Markdown for QA), tables, syntax highlight, background file logging, optional HTML report writer.
 - **config.yml** — models, limits, prompts (required to run).
+- **tests/** — `pytest` unit tests for verdict parsing, markdown stripping, config load, CLI parser, linter row parsing, HTML report.
