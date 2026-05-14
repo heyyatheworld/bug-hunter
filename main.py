@@ -90,6 +90,7 @@ class BugHunter:
         self,
         config: dict,
         dev_model_override: str | None = None,
+        qa_model_override: str | None = None,
         max_iters_override: int | None = None,
         demo_mode: bool = False,
     ):
@@ -98,7 +99,7 @@ class BugHunter:
         models = config.get("models") or {}
         settings = config.get("settings") or {}
         self.dev_model = dev_model_override or models.get("dev") or "qwen2.5-coder:7b"
-        self.qa_model = models.get("qa") or "qwen2.5-coder:7b"
+        self.qa_model = qa_model_override or models.get("qa") or "qwen2.5-coder:7b"
         self.max_iters = max_iters_override if max_iters_override is not None else settings.get("max_iterations", 5)
         self.line_length = settings.get("line_length", 88)
         prompts = config.get("prompts") or {}
@@ -377,19 +378,29 @@ class BugHunter:
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="BugHunter",
-        description="Generate and refine Python code from a task (config: config.yml).",
+        description="Generate and refine Python code from a task (YAML config; default config.yml next to this script).",
         epilog=(
             "Examples:\n"
             "  python main.py\n"
             "  python main.py \"sum of list\"\n"
             "  python main.py --preset fibo --demo\n"
+            "  python main.py -c /path/to/config.yml --qa-model llama3\n"
             "  python main.py \"factorial\" -i 10 --model llama3"
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument("task", type=str, nargs="?", default=None, help="Task description (optional if --preset is used).")
+    parser.add_argument(
+        "-c",
+        "--config",
+        type=str,
+        default=None,
+        metavar="PATH",
+        help=f"YAML config file (default: {CONFIG_FILENAME} next to main.py).",
+    )
     parser.add_argument("-i", "--iters", type=int, default=None, metavar="N", help="Override max iterations from config.")
     parser.add_argument("--model", type=str, default=None, metavar="NAME", help="Override DEV model from config.")
+    parser.add_argument("--qa-model", type=str, default=None, metavar="NAME", help="Override QA model from config.")
     parser.add_argument(
         "--preset",
         type=str,
@@ -418,9 +429,9 @@ if __name__ == "__main__":
     show_banner(PROJECT_NAME)
     start_background_logger(LOG_FILE, clear=True)
     try:
-        config = load_config()
         parser = _build_parser()
         args = parser.parse_args()
+        config = load_config(args.config)
         if args.preset:
             task = PRESET_TASKS[args.preset]
             if (args.task or "").strip():
@@ -429,17 +440,21 @@ if __name__ == "__main__":
             task = (args.task or "").strip() or DEFAULT_TASK
         max_iters = getattr(args, "iters", None)
         model = getattr(args, "model", None)
+        qa_model = getattr(args, "qa_model", None)
         test_call = getattr(args, "test", None)
         demo_mode = bool(getattr(args, "demo", False))
 
         hunter = BugHunter(
             config,
             dev_model_override=model,
+            qa_model_override=qa_model,
             max_iters_override=max_iters,
             demo_mode=demo_mode,
         )
         preview = task[:60] + "..." if len(task) > 60 else task
-        info(f"Starting \"{preview}\" | model={hunter.dev_model} | max_iters={hunter.max_iters}")
+        info(
+            f"Starting \"{preview}\" | dev={hunter.dev_model} | qa={hunter.qa_model} | max_iters={hunter.max_iters}"
+        )
         hunter.hunt(task, test_call=test_call)
     finally:
         stop_background_logger()

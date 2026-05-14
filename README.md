@@ -92,7 +92,7 @@ prompts:
 - **settings.line_length** — line length limit for Black and flake8.
 - **prompts.developer / prompts.qa** — system prompts; `{line_length}` is available in the developer prompt.
 
-If `config.yml` is missing or empty, the script exits with an error.
+If the config file is missing or empty, the script exits with an error. By default the file **`config.yml`** in the project root (next to `main.py`) is used; override with **`-c` / `--config PATH`**.
 
 ## Usage (CLI)
 
@@ -115,10 +115,12 @@ Flags override config:
 | Argument | Description |
 |----------|-------------|
 | `task` | Task description (optional positional; default is a short `add(a, b)` task). |
+| `-c`, `--config PATH` | YAML config file (default: `config.yml` next to `main.py`). |
 | `--preset NAME` | Built-in task: `sum`, `fibo`, or `path`. Overrides positional `task` when set. |
 | `--demo` | Presentation mode: section dividers between iterations and short pauses. |
 | `-i`, `--iters N` | Max iterations (overrides `settings.max_iterations`). |
 | `--model NAME` | Ollama model for DEV (overrides `models.dev`). |
+| `--qa-model NAME` | Ollama model for QA (overrides `models.qa`). |
 | `-t`, `--test PYCODE` | Python code to append at the end of the script for testing (e.g. `print(my_func(10))`). Injected only during execution; not saved to `solution.py`. |
 
 Examples:
@@ -127,6 +129,7 @@ Examples:
 python main.py
 python main.py --preset fibo --demo
 python main.py --preset path -i 8
+python main.py -c ./config.yml --qa-model mistral
 python main.py "Sum of a list of numbers"
 python main.py "Factorial" -i 10 --model llama3
 python main.py "Write a sum function" --test "print(sum(5, 5))"
