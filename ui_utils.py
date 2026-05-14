@@ -4,12 +4,14 @@ progress bars, tables/panels, and syntax-highlighted code.
 Logging to file runs in a background thread.
 """
 
+import html
 import queue
 import threading
 import time
 from contextlib import contextmanager
 
 from rich.console import Console
+from rich.markdown import Markdown
 from rich.panel import Panel
 from rich.progress import (
     BarColumn,
@@ -125,14 +127,70 @@ def status_llm_thinking(msg: str = "LLM analyzing code..."):
     return console.status(f"[bold purple]{msg}[/bold purple]", spinner="dots")
 
 
-def panel_ai_assistant(content: str, role: str = "AI Assistant", as_code: bool = False) -> None:
+def panel_ai_assistant(
+    content: str,
+    role: str = "AI Assistant",
+    as_code: bool = False,
+    as_markdown: bool = False,
+) -> None:
     """Show LLM response in a panel titled [AI Assistant]. Use as_code=True for code (Syntax)."""
     title = f"[AI Assistant] {role}"
     if as_code:
         syn = Syntax(content, "python", line_numbers=True, theme="monokai")
         console.print(Panel(syn, title=title, border_style="magenta", padding=(0, 1)))
+    elif as_markdown:
+        console.print(Panel(Markdown(content), title=title, border_style="magenta", padding=(0, 1)))
     else:
         console.print(Panel(content, title=title, border_style="magenta", padding=(1, 2)))
+
+
+_HTML_REPORT_FIELD_MAX = 48_000
+
+
+def _html_report_chunk(text: str) -> str:
+    if len(text) > _HTML_REPORT_FIELD_MAX:
+        text = text[:_HTML_REPORT_FIELD_MAX] + "\n\n[... truncated for HTML report ...]"
+    return f"<pre>{html.escape(text)}</pre>"
+
+
+def write_html_report(path: str, task: str, iterations: list[dict], achieved: bool) -> None:
+    """Write a static HTML summary (escaped text in pre blocks). iterations: dicts with keys i, code, linter, runtime, qa, qa_pass, linter_ok."""
+    status = "Target achieved" if achieved else "Incomplete / max iterations"
+    chunks = [
+        "<!DOCTYPE html>",
+        '<html lang="en"><head><meta charset="utf-8">',
+        "<title>BugHunter report</title>",
+        "<style>",
+        "body{font-family:system-ui,sans-serif;max-width:56rem;margin:1.5rem auto;padding:0 1rem;line-height:1.45;}",
+        "h1,h2{color:#222;} pre{white-space:pre-wrap;word-break:break-word;background:#f6f8fa;padding:1rem;border-radius:6px;border:1px solid #d0d7de;}",
+        ".meta{color:#555;font-size:0.95rem;} .ok{color:#0a0;} .bad{color:#a00;}",
+        "</style></head><body>",
+        "<h1>BugHunter report</h1>",
+        f'<p class="meta">Status: <strong>{html.escape(status)}</strong></p>',
+        "<h2>Task</h2>",
+        _html_report_chunk(task),
+    ]
+    for row in iterations:
+        i = row["i"]
+        qp = "PASS" if row.get("qa_pass") else "ISSUES"
+        lo = "OK" if row.get("linter_ok") else "ISSUES"
+        qa_cls = "ok" if row.get("qa_pass") else "bad"
+        chunks.append(f"<h2>Iteration {html.escape(str(i))}</h2>")
+        chunks.append(
+            f'<p class="meta">QA verdict: <span class="{qa_cls}">{html.escape(qp)}</span> · '
+            f"Linter: {html.escape(lo)}</p>"
+        )
+        chunks.append("<h3>Code</h3>")
+        chunks.append(_html_report_chunk(row.get("code", "")))
+        chunks.append("<h3>Linter</h3>")
+        chunks.append(_html_report_chunk(row.get("linter", "")))
+        chunks.append("<h3>Runtime</h3>")
+        chunks.append(_html_report_chunk(row.get("runtime", "")))
+        chunks.append("<h3>QA</h3>")
+        chunks.append(_html_report_chunk(row.get("qa", "")))
+    chunks.append("</body></html>")
+    with open(path, "w", encoding="utf-8") as f:
+        f.write("\n".join(chunks))
 
 
 @contextmanager

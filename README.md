@@ -121,6 +121,7 @@ Flags override config:
 | `-i`, `--iters N` | Max iterations (overrides `settings.max_iterations`). |
 | `--model NAME` | Ollama model for DEV (overrides `models.dev`). |
 | `--qa-model NAME` | Ollama model for QA (overrides `models.qa`). |
+| `--html-report PATH` | After the run, write a static HTML summary of each iteration (task, code, linter, runtime, QA). |
 | `-t`, `--test PYCODE` | Python code to append at the end of the script for testing (e.g. `print(my_func(10))`). Injected only during execution; not saved to `solution.py`. |
 
 Examples:
@@ -129,6 +130,7 @@ Examples:
 python main.py
 python main.py --preset fibo --demo
 python main.py --preset path -i 8
+python main.py --preset fibo --html-report report.html
 python main.py -c ./config.yml --qa-model mistral
 python main.py "Sum of a list of numbers"
 python main.py "Factorial" -i 10 --model llama3
@@ -140,7 +142,7 @@ python main.py "Parse CSV into dict" --iters 3
 
 - **Banner** — BugHunter title panel at start.
 - **LLM status** — Spinner with "LLM generating code..." / "LLM analyzing code..." during model calls.
-- **[AI Assistant] panels** — DEV output (code with syntax highlight) and QA output (text) in separate panels.
+- **[AI Assistant] panels** — DEV output (code with syntax highlight). QA output is rendered as **Markdown** inside the panel when the model uses headings, lists, or emphasis.
 - **Bugs table** — After QA: error type, line, severity, recommendation (including flake8 output and QA verdict).
 - **Progress** — Iteration bar with percentage and time remaining.
 - **Summary** — Panel with paths to `solution.py` and log file; then panel with final code (Syntax, monokai theme).
@@ -149,9 +151,10 @@ python main.py "Parse CSV into dict" --iters 3
 
 - **solution.py** — final generated code only (no debug or test snippets). Overwritten with clean, Black-formatted code when the target is achieved. In `.gitignore`.
 - **bughunter_log.txt** — step-by-step iteration log, including Docker command and raw stdout/stderr when using the sandbox. Written in the background; in `.gitignore`.
+- **Optional HTML report** — with `--html-report PATH`, a single static HTML file is written after the hunt: task plus one section per completed iteration (code, linter, runtime, QA; long fields are truncated for file size). Safe for sharing (content is HTML-escaped in `<pre>` blocks).
 
 ## Project structure
 
 - **main.py** — config load, argparse, `BugHunter` class (Docker/local execution, regex extraction, final clean write), entry point under `if __name__ == "__main__"`.
-- **ui_utils.py** — Rich console, status spinners, panels, tables, syntax highlight, background file logging.
+- **ui_utils.py** — Rich console, status spinners, panels (including Markdown for QA), tables, syntax highlight, background file logging, optional HTML report writer.
 - **config.yml** — models, limits, prompts (required to run).

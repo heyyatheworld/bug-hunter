@@ -32,6 +32,7 @@ from ui_utils import (
     success,
     table_bugs,
     warning,
+    write_html_report,
 )
 
 PROJECT_NAME = "BugHunter"
@@ -93,9 +94,11 @@ class BugHunter:
         qa_model_override: str | None = None,
         max_iters_override: int | None = None,
         demo_mode: bool = False,
+        html_report_path: str | None = None,
     ):
         self.config = config
         self.demo_mode = demo_mode
+        self.html_report_path = html_report_path
         models = config.get("models") or {}
         settings = config.get("settings") or {}
         self.dev_model = dev_model_override or models.get("dev") or "qwen2.5-coder:7b"
@@ -258,6 +261,7 @@ class BugHunter:
         execution_result = ""
         linter_ok = True
         achieved = False
+        report_rows: list[dict] = []
 
         with iteration_progress(self.max_iters, "Iterations") as (progress, task_id):
             for i in range(self.max_iters):
@@ -336,7 +340,12 @@ class BugHunter:
                     )
                 feedback = qa_response["message"]["content"]
                 qa_pass = qa_verdict_passes(feedback)
-                panel_ai_assistant(feedback[:1500] + ("..." if len(feedback) > 1500 else ""), role="QA", as_code=False)
+                panel_ai_assistant(
+                    feedback[:1500] + ("..." if len(feedback) > 1500 else ""),
+                    role="QA",
+                    as_code=False,
+                    as_markdown=True,
+                )
                 bug_rows = parse_linter_to_bug_rows(linter_result)
                 bug_rows.append((
                     "QA Verdict",
@@ -351,6 +360,19 @@ class BugHunter:
                     warning("QA: issues")
 
                 self._log(f"ITERATION {i}\nCODE:\n{current_code}\nLINTER:\n{linter_result}\nRUNTIME:\n{execution_result}\nQA:\n{feedback}")
+
+                if self.html_report_path:
+                    report_rows.append(
+                        {
+                            "i": i,
+                            "code": current_code,
+                            "linter": linter_result,
+                            "runtime": execution_result,
+                            "qa": feedback,
+                            "qa_pass": qa_pass,
+                            "linter_ok": linter_ok,
+                        }
+                    )
 
                 progress.update(task_id, advance=1)
 
@@ -369,6 +391,13 @@ class BugHunter:
             final_clean = self._apply_black(current_code)
             self._save_solution(final_clean)
 
+        if self.html_report_path and report_rows:
+            try:
+                write_html_report(self.html_report_path, task, report_rows, achieved)
+                info(f"HTML report written to {self.html_report_path}")
+            except OSError as exc:
+                warning(f"Could not write HTML report ({exc}).")
+
         final_summary(RESULT_FILE, LOG_FILE, achieved)
         if os.path.isfile(RESULT_FILE):
             with open(RESULT_FILE, "r", encoding="utf-8") as f:
@@ -384,6 +413,7 @@ def _build_parser() -> argparse.ArgumentParser:
             "  python main.py\n"
             "  python main.py \"sum of list\"\n"
             "  python main.py --preset fibo --demo\n"
+            "  python main.py --preset fibo --html-report report.html\n"
             "  python main.py -c /path/to/config.yml --qa-model llama3\n"
             "  python main.py \"factorial\" -i 10 --model llama3"
         ),
@@ -422,6 +452,13 @@ def _build_parser() -> argparse.ArgumentParser:
         metavar="PYCODE",
         help="Python code to append at the end of the script for testing (e.g., \"print(my_func(10))\").",
     )
+    parser.add_argument(
+        "--html-report",
+        type=str,
+        default=None,
+        metavar="PATH",
+        help="After the run, write an HTML summary of each iteration (code, linter, runtime, QA) to PATH.",
+    )
     return parser
 
 
@@ -443,6 +480,7 @@ if __name__ == "__main__":
         qa_model = getattr(args, "qa_model", None)
         test_call = getattr(args, "test", None)
         demo_mode = bool(getattr(args, "demo", False))
+        html_report = getattr(args, "html_report", None)
 
         hunter = BugHunter(
             config,
@@ -450,6 +488,7 @@ if __name__ == "__main__":
             qa_model_override=qa_model,
             max_iters_override=max_iters,
             demo_mode=demo_mode,
+            html_report_path=html_report,
         )
         preview = task[:60] + "..." if len(task) > 60 else task
         info(
