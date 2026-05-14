@@ -118,6 +118,26 @@ def qa_verdict_passes(feedback: str) -> bool:
     return "PASS" in feedback.upper()
 
 
+def ollama_chat_or_exit(
+    *,
+    model: str,
+    messages: list[dict[str, str]],
+    phase: str,
+    iteration: int,
+) -> dict:
+    """Call ollama.chat; on failure print a hint and exit with code 2."""
+    try:
+        return ollama.chat(
+            model=model,
+            messages=messages,
+            options={"temperature": 0},
+        )
+    except Exception as exc:  # noqa: BLE001
+        error(f"Ollama request failed ({phase}, iteration {iteration}, model={model!r}): {exc!s}")
+        info("Ensure `ollama serve` is running; for a remote server set OLLAMA_HOST (see Ollama documentation).")
+        sys.exit(2)
+
+
 class BugHunter:
     """Orchestrates code generation, formatting, linting, and QA feedback loop."""
 
@@ -327,13 +347,14 @@ class BugHunter:
 
                 dev_qa_line(i, self.dev_model, "generating")
                 with status_llm_thinking("LLM generating code..."):
-                    response = ollama.chat(
+                    response = ollama_chat_or_exit(
                         model=self.dev_model,
                         messages=[
                             {"role": "system", "content": dev_system},
                             {"role": "user", "content": dev_user},
                         ],
-                        options={"temperature": 0},
+                        phase="DEV",
+                        iteration=i,
                     )
 
                 code_before = current_code
@@ -364,13 +385,14 @@ class BugHunter:
                 feedback_data = f"TASK:\n{task}\n\nCODE:\n{current_code}\n\nLINTER:\n{linter_result}\n\nRUNTIME:\n{execution_result}"
                 dev_qa_line(i, self.qa_model, "analyzing")
                 with status_llm_thinking("LLM analyzing code..."):
-                    qa_response = ollama.chat(
+                    qa_response = ollama_chat_or_exit(
                         model=self.qa_model,
                         messages=[
                             {"role": "system", "content": self.prompt_qa},
                             {"role": "user", "content": feedback_data},
                         ],
-                        options={"temperature": 0},
+                        phase="QA",
+                        iteration=i,
                     )
                 feedback = qa_response["message"]["content"]
                 qa_pass = qa_verdict_passes(feedback)

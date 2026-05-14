@@ -138,6 +138,37 @@ def test_check_ollama_exits_when_model_missing(monkeypatch: pytest.MonkeyPatch) 
         main.check_ollama_and_models("not-there", "not-there", skip=False)
 
 
+def test_ollama_chat_or_exit_success(monkeypatch: pytest.MonkeyPatch) -> None:
+    def fake_chat(**kwargs: object) -> dict:
+        assert kwargs.get("model") == "m1"
+        return {"message": {"content": "ok"}}
+
+    monkeypatch.setattr(main.ollama, "chat", fake_chat)
+    out = main.ollama_chat_or_exit(
+        model="m1",
+        messages=[{"role": "user", "content": "hi"}],
+        phase="DEV",
+        iteration=0,
+    )
+    assert out["message"]["content"] == "ok"
+
+
+def test_ollama_chat_or_exit_failure_exits_2(monkeypatch: pytest.MonkeyPatch) -> None:
+    def boom(**kwargs: object) -> None:
+        raise ConnectionError("refused")
+
+    monkeypatch.setattr(main.ollama, "chat", boom)
+    monkeypatch.setattr(sys, "exit", lambda c: (_ for _ in ()).throw(SystemExit(c)))
+    with pytest.raises(SystemExit) as ei:
+        main.ollama_chat_or_exit(
+            model="m1",
+            messages=[{"role": "user", "content": "x"}],
+            phase="QA",
+            iteration=1,
+        )
+    assert ei.value.args[0] == 2
+
+
 def test_parser_version_prints_and_exits(capsys: pytest.CaptureFixture[str]) -> None:
     parser = main._build_parser()
     with pytest.raises(SystemExit) as ei:

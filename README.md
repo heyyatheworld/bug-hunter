@@ -30,7 +30,7 @@ These differ because container startup adds overhead; local runs are meant to fa
 ## Requirements
 
 - Python 3.x
-- [Ollama](https://ollama.ai/) with a running server and models (names in `config.yml`; default `qwen2.5-coder:7b` for DEV and QA)
+- [Ollama](https://ollama.ai/) with a running server and models (names in `config.yml`; default `qwen2.5-coder:7b` for DEV and QA). To use a **remote** Ollama instance, set the **`OLLAMA_HOST`** environment variable (URL including scheme, e.g. `http://192.168.1.10:11434`) before starting BugHunter; the official Python client reads it automatically.
 - **Docker** (optional) — for sandboxed execution. If Docker is not installed or not running, execution falls back to the local Python interpreter.
 - Optional: **flake8** for style checks (if missing, lint step is skipped)
 
@@ -106,6 +106,8 @@ prompts:
 - **prompts.developer / prompts.qa** — system prompts; `{line_length}` is available in the developer prompt.
 
 If the config file is missing or empty, the script exits with an error. By default the file **`config.yml`** in the project root (next to `main.py`) is used; override with **`-c` / `--config PATH`**.
+
+**Exit codes:** `0` — finished the hunt loop (success or max iterations). `1` — config / startup checks (missing config, empty YAML, Ollama unreachable or missing models during preflight). `2` — Ollama request failed during DEV or QA chat (e.g. connection dropped mid-run).
 
 ## Usage (CLI)
 
