@@ -1,3 +1,5 @@
+# When tagging a release, bump main.__version__ and the top of CHANGELOG.md.
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"

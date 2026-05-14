@@ -1,6 +1,10 @@
 # BugHunter
 
-CLI tool for automatic Python code generation and verification using two LLMs: one acts as a developer (DEV), the other as a QA engineer. Code is formatted with Black, checked with flake8, and executed in an isolated **Docker** sandbox (or locally if Docker is unavailable). Results and linter output are passed to QA. The cycle repeats until "PASS" and a clean linter run, or until the iteration limit is reached. Console UI is built with **Rich** (banner, LLM status spinners, AI response panels, bugs table).
+**Version 1.0.0** · [CHANGELOG](CHANGELOG.md) · [License: MIT](LICENSE)
+
+CLI for automatic **Python** generation and review using two **Ollama** models: a developer (DEV) and a QA reviewer. Code is formatted with **Black**, optionally checked with **flake8**, and executed in a **Docker** sandbox or locally. The loop continues until QA and the linter agree (with safeguards against infinite churn) or the iteration limit is reached. The interface uses **Rich** (banner, spinners, panels, bugs table, progress).
+
+**At a glance:** presets (`--preset`) and presentation mode (`--demo`), optional **HTML** report, Ollama **preflight** and clearer **runtime errors**, **`OLLAMA_HOST`** for remote servers, **`pytest`** plus **GitHub Actions** CI.
 
 ## How it works
 
@@ -29,10 +33,10 @@ These differ because container startup adds overhead; local runs are meant to fa
 
 ## Requirements
 
-- Python 3.x
+- Python **3.11+** (aligned with CI; requires a current stdlib and typing style used in the repo)
 - [Ollama](https://ollama.ai/) with a running server and models (names in `config.yml`; default `qwen2.5-coder:7b` for DEV and QA). To use a **remote** Ollama instance, set the **`OLLAMA_HOST`** environment variable (URL including scheme, e.g. `http://192.168.1.10:11434`) before starting BugHunter; the official Python client reads it automatically.
 - **Docker** (optional) — for sandboxed execution. If Docker is not installed or not running, execution falls back to the local Python interpreter.
-- Optional: **flake8** for style checks (if missing, lint step is skipped)
+- Optional: **flake8** on your PATH for linting generated code (also listed in **`requirements.txt`** for dev/CI).
 
 ## Installation
 
@@ -41,6 +45,15 @@ pip install -r requirements.txt
 ```
 
 Dependencies: `ollama`, `black`, `PyYAML`, `rich`, `pytest` (for the test suite in `tests/`).
+
+## Quick start
+
+1. Start **Ollama** and pull the models named in **`config.yml`** (defaults expect `ollama pull qwen2.5-coder:7b` unless you pass **`--model`** / **`--qa-model`**).
+2. Install: `python -m venv .venv && .venv/bin/python -m pip install -r requirements.txt`
+3. Verify: `.venv/bin/python main.py --version`
+4. Run: `.venv/bin/python main.py` or e.g. `.venv/bin/python main.py --preset fibo --demo`
+
+**Docker** is optional; if it is missing or the daemon is down, execution uses the same interpreter as in step 2.
 
 ## Tests
 
@@ -52,7 +65,7 @@ python -m pytest tests/
 
 If your `venv` uses a different Python than the `pip` you invoked, use the same interpreter for both install and test, for example `.venv/bin/python -m pip install -r requirements.txt` then `.venv/bin/python -m pytest tests/`.
 
-On GitHub, **CI** (`.github/workflows/ci.yml`) runs `pytest` on push and pull requests to `main` / `master` for Python 3.11–3.13.
+On GitHub, **CI** (`.github/workflows/ci.yml`) runs **`pytest`** and **`flake8`** on push and pull requests to `main` / `master` for Python 3.11–3.13. Flake8 rules live in **`.flake8`** (line length 88; long lines are ignored as **E501** so the tool matches Black-focused workflows).
 
 With a virtual environment:
 
@@ -68,10 +81,10 @@ Ensure Ollama is running and required models are pulled (names from `config.yml`
 ollama pull qwen2.5-coder:7b
 ```
 
-Optional, for linting:
+Optional: run **flake8** locally the same way as CI:
 
 ```bash
-pip install flake8
+python -m flake8 main.py ui_utils.py tests/
 ```
 
 For sandboxed runs, have Docker installed and the daemon running. If not, BugHunter will warn and use local execution.
@@ -176,6 +189,9 @@ python main.py "Parse CSV into dict" --iters 3
 - **main.py** — config load, argparse, `BugHunter` class (Docker/local execution, regex extraction, final clean write), entry point under `if __name__ == "__main__"`.
 - **ui_utils.py** — Rich console, status spinners, panels (including Markdown for QA), tables, syntax highlight, background file logging, optional HTML report writer.
 - **pyproject.toml** — pytest and Black tool defaults.
-- **.github/workflows/ci.yml** — GitHub Actions: pytest on supported Python versions.
+- **.flake8** — flake8 defaults for local runs and CI.
+- **.github/workflows/ci.yml** — GitHub Actions: pytest + flake8 on supported Python versions.
+- **CHANGELOG.md** — release notes.
+- **LICENSE** — MIT.
 - **config.yml** — models, limits, prompts (required to run).
-- **tests/** — `pytest` unit tests for verdict parsing, markdown stripping, config load, CLI parser, linter row parsing, HTML report.
+- **tests/** — `pytest` unit tests for verdict parsing, markdown stripping, config load, CLI parser, linter row parsing, HTML report, Ollama helpers.

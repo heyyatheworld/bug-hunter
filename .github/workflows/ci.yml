@@ -21,3 +21,5 @@ jobs:
         run: pip install -r requirements.txt
       - name: Pytest
         run: python -m pytest tests/
+      - name: Flake8
+        run: python -m flake8 main.py ui_utils.py tests/

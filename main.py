@@ -36,7 +36,7 @@ from ui_utils import (
 )
 
 PROJECT_NAME = "BugHunter"
-__version__ = "0.2.0"
+__version__ = "1.0.0"
 LOG_FILE = "bughunter_log.txt"
 RESULT_FILE = "solution.py"
 DEFAULT_TASK = (
