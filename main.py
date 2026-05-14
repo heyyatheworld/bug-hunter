@@ -136,7 +136,7 @@ class BugHunter:
         def _run_local() -> str:
             try:
                 result = subprocess.run(
-                    ["python", filename],
+                    [sys.executable, filename],
                     capture_output=True,
                     text=True,
                     timeout=5,

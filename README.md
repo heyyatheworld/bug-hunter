@@ -51,6 +51,8 @@ python -m pytest tests/
 
 If your `venv` uses a different Python than the `pip` you invoked, use the same interpreter for both install and test, for example `.venv/bin/python -m pip install -r requirements.txt` then `.venv/bin/python -m pytest tests/`.
 
+On GitHub, **CI** (`.github/workflows/ci.yml`) runs `pytest` on push and pull requests to `main` / `master` for Python 3.11–3.13.
+
 With a virtual environment:
 
 ```bash
@@ -167,5 +169,7 @@ python main.py "Parse CSV into dict" --iters 3
 
 - **main.py** — config load, argparse, `BugHunter` class (Docker/local execution, regex extraction, final clean write), entry point under `if __name__ == "__main__"`.
 - **ui_utils.py** — Rich console, status spinners, panels (including Markdown for QA), tables, syntax highlight, background file logging, optional HTML report writer.
+- **pyproject.toml** — pytest and Black tool defaults.
+- **.github/workflows/ci.yml** — GitHub Actions: pytest on supported Python versions.
 - **config.yml** — models, limits, prompts (required to run).
 - **tests/** — `pytest` unit tests for verdict parsing, markdown stripping, config load, CLI parser, linter row parsing, HTML report.

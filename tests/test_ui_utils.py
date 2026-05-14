@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
-
 from ui_utils import parse_linter_to_bug_rows, write_html_report
 
 

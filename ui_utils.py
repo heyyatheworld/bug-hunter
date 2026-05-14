@@ -46,7 +46,6 @@ _log_filepath: str = ""
 
 
 def _log_worker() -> None:
-    global _log_filepath
     with open(_log_filepath, "a", encoding="utf-8") as f:
         while True:
             item = _log_queue.get()
@@ -294,9 +293,9 @@ def dev_qa_line(iteration: int, model: str, kind: str) -> None:
 
 def step_result(lines: int, linter_ok: bool, runtime_ok: bool) -> None:
     """Single line: DEV: N lines | Linter: OK/ISSUES | Runtime: OK/ERROR"""
-    l = "OK" if linter_ok else "ISSUES"
-    r = "OK" if runtime_ok else "ERROR"
-    console.print(f"  [dim]DEV: {lines} lines | Linter: {l} | Runtime: {r}[/dim]")
+    lint_s = "OK" if linter_ok else "ISSUES"
+    run_s = "OK" if runtime_ok else "ERROR"
+    console.print(f"  [dim]DEV: {lines} lines | Linter: {lint_s} | Runtime: {run_s}[/dim]")
 
 
 def final_summary(result_file: str, log_file: str, achieved: bool) -> None:
