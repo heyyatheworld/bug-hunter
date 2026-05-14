@@ -4,16 +4,17 @@ CLI tool for automatic Python code generation and verification using two LLMs: o
 
 ## How it works
 
-1. **DEV** (model from config) — generates Python code from the task description.
-2. **Black** — code is formatted (`line_length` from `config.yml`) before linting.
-3. **flake8** — static check (PEP 8, line length). Errors go into the bugs table and into DEV feedback.
-4. **Execution** — generated code is saved to `solution.py` and run:
+1. **Startup** — After **config** is loaded and DEV/QA model names are resolved (including CLI overrides), BugHunter queries Ollama for the local model list. If the server is unreachable or those models are not installed, the program exits with a short hint (use **`--skip-model-check`** to skip this, e.g. for debugging).
+2. **DEV** (model from config) — generates Python code from the task description.
+3. **Black** — code is formatted (`line_length` from `config.yml`) before linting.
+4. **flake8** — static check (PEP 8, line length). Errors go into the bugs table and into DEV feedback.
+5. **Execution** — generated code is saved to `solution.py` and run:
    - **Docker** (default): `python:3.11-slim`, read-only mount of `solution.py`, `--network none`, `--memory=128m`, `--cpus=0.5`, `--rm`. A temporary env check and optional test snippet are injected only for the run; the file is restored afterward so `solution.py` stays clean.
    - **Local fallback** — if Docker is not installed or the daemon is unreachable, code runs with the local Python (with the same temporary injection and restoration).
-5. **QA** — second model receives task, code, linter and runtime output; should start the verdict with `VERDICT: PASS` or `VERDICT: ISSUES` (see `config.yml`). The app parses that line when present.
-6. **Iterations** — QA and linter feedback are sent back to DEV for fixes; cycle repeats (limit set in config or via `-i`).
-7. **Anti-loop** — if the model returns identical code while linter or QA still report issues, the loop stops ("Agent Stuck in Loop").
-8. **Final cleanup** — when the target is achieved, `solution.py` is overwritten with only the approved code (Black-formatted, no debug or test snippets).
+6. **QA** — second model receives task, code, linter and runtime output; should start the verdict with `VERDICT: PASS` or `VERDICT: ISSUES` (see `config.yml`). The app parses that line when present.
+7. **Iterations** — QA and linter feedback are sent back to DEV for fixes; cycle repeats (limit set in config or via `-i`).
+8. **Anti-loop** — if the model returns identical code while linter or QA still report issues, the loop stops ("Agent Stuck in Loop").
+9. **Final cleanup** — when the target is achieved, `solution.py` is overwritten with only the approved code (Black-formatted, no debug or test snippets).
 
 LLM output is normalized: the first ` ```python ... ``` ` block is extracted with a regex so extra text before/after does not end up in the file. Iteration logs are written to **bughunter_log.txt** in the background; the Rich UI is shown in the console.
 
@@ -126,10 +127,12 @@ Flags override config:
 
 | Argument | Description |
 |----------|-------------|
+| `--version` | Print BugHunter version and exit (no run). |
 | `task` | Task description (optional positional; default is a short `add(a, b)` task). |
 | `-c`, `--config PATH` | YAML config file (default: `config.yml` next to `main.py`). |
 | `--preset NAME` | Built-in task: `sum`, `fibo`, or `path`. Overrides positional `task` when set. |
 | `--demo` | Presentation mode: section dividers between iterations and short pauses. |
+| `--skip-model-check` | Do not verify Ollama reachability or that DEV/QA models are installed locally. |
 | `-i`, `--iters N` | Max iterations (overrides `settings.max_iterations`). |
 | `--model NAME` | Ollama model for DEV (overrides `models.dev`). |
 | `--qa-model NAME` | Ollama model for QA (overrides `models.qa`). |
@@ -140,6 +143,7 @@ Examples:
 
 ```bash
 python main.py
+python main.py --version
 python main.py --preset fibo --demo
 python main.py --preset path -i 8
 python main.py --preset fibo --html-report report.html

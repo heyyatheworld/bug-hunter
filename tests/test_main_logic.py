@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 import yaml
@@ -100,3 +101,54 @@ def test_bug_hunter_model_overrides() -> None:
     h = main.BugHunter(cfg, dev_model_override="d-override", qa_model_override="q-override")
     assert h.dev_model == "d-override"
     assert h.qa_model == "q-override"
+
+
+def test_model_available_on_host() -> None:
+    installed = {"qwen2.5-coder:7b", "llama3:latest", "mistral"}
+    assert main.model_available_on_host("qwen2.5-coder:7b", installed) is True
+    assert main.model_available_on_host("llama3", installed) is True
+    assert main.model_available_on_host("mistral", installed) is True
+    assert main.model_available_on_host("missing:tag", installed) is False
+    assert main.model_available_on_host("llama3:8b", installed) is False
+
+
+def test_check_ollama_and_models_skip_skips_list(monkeypatch: pytest.MonkeyPatch) -> None:
+    def boom() -> None:
+        raise AssertionError("ollama.list should not be called when skip=True")
+
+    monkeypatch.setattr(main.ollama, "list", boom)
+    main.check_ollama_and_models("any", "any", skip=True)
+
+
+def test_check_ollama_exits_when_unreachable(monkeypatch: pytest.MonkeyPatch) -> None:
+    def fail() -> None:
+        raise ConnectionError("refused")
+
+    monkeypatch.setattr(main.ollama, "list", fail)
+    monkeypatch.setattr(sys, "exit", lambda c: (_ for _ in ()).throw(SystemExit(c)))
+    with pytest.raises(SystemExit):
+        main.check_ollama_and_models("a", "b", skip=False)
+
+
+def test_check_ollama_exits_when_model_missing(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_resp = SimpleNamespace(models=[SimpleNamespace(model="foo:bar")])
+    monkeypatch.setattr(main.ollama, "list", lambda: fake_resp)
+    monkeypatch.setattr(sys, "exit", lambda c: (_ for _ in ()).throw(SystemExit(c)))
+    with pytest.raises(SystemExit):
+        main.check_ollama_and_models("not-there", "not-there", skip=False)
+
+
+def test_parser_version_prints_and_exits(capsys: pytest.CaptureFixture[str]) -> None:
+    parser = main._build_parser()
+    with pytest.raises(SystemExit) as ei:
+        parser.parse_args(["--version"])
+    assert ei.value.code == 0
+    out = capsys.readouterr().out
+    assert main.__version__ in out
+    assert "BugHunter" in out
+
+
+def test_parser_skip_model_check_flag() -> None:
+    parser = main._build_parser()
+    args = parser.parse_args(["--skip-model-check"])
+    assert args.skip_model_check is True

@@ -36,6 +36,7 @@ from ui_utils import (
 )
 
 PROJECT_NAME = "BugHunter"
+__version__ = "0.2.0"
 LOG_FILE = "bughunter_log.txt"
 RESULT_FILE = "solution.py"
 DEFAULT_TASK = (
@@ -74,6 +75,39 @@ def load_config(path: str | None = None) -> dict:
         error("Config file is empty.")
         sys.exit(1)
     return data
+
+
+def model_available_on_host(requested: str, installed_names: set[str]) -> bool:
+    """True if requested model name is present or an unqualified name matches any installed tag (e.g. llama3 -> llama3:latest)."""
+    if requested in installed_names:
+        return True
+    if ":" not in requested:
+        return any(name.split(":", 1)[0] == requested for name in installed_names)
+    return False
+
+
+def check_ollama_and_models(dev: str, qa: str, *, skip: bool = False) -> None:
+    """Exit with message if Ollama is unreachable or required models are missing (unless skip is True)."""
+    if skip:
+        return
+    try:
+        resp = ollama.list()
+    except Exception as exc:  # noqa: BLE001
+        error(f"Cannot reach Ollama ({exc!s}). Is `ollama serve` running?")
+        sys.exit(1)
+    installed = {m.model for m in resp.models}
+    missing: list[str] = []
+    if not model_available_on_host(dev, installed):
+        missing.append(f"DEV {dev!r}")
+    if not model_available_on_host(qa, installed):
+        missing.append(f"QA {qa!r}")
+    if missing:
+        error("Model(s) not found locally: " + ", ".join(missing))
+        sample = sorted(installed)[:15]
+        tail = "…" if len(installed) > len(sample) else ""
+        info(f"Installed models (sample): {', '.join(sample)}{tail}")
+        info("Pull a model with: ollama pull <name>")
+        sys.exit(1)
 
 
 def qa_verdict_passes(feedback: str) -> bool:
@@ -410,6 +444,7 @@ def _build_parser() -> argparse.ArgumentParser:
         description="Generate and refine Python code from a task (YAML config; default config.yml next to this script).",
         epilog=(
             "Examples:\n"
+            "  python main.py --version\n"
             "  python main.py\n"
             "  python main.py \"sum of list\"\n"
             "  python main.py --preset fibo --demo\n"
@@ -419,6 +454,7 @@ def _build_parser() -> argparse.ArgumentParser:
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
+    parser.add_argument("--version", action="version", version=f"{PROJECT_NAME} {__version__}")
     parser.add_argument("task", type=str, nargs="?", default=None, help="Task description (optional if --preset is used).")
     parser.add_argument(
         "-c",
@@ -445,6 +481,11 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Presentation mode: section rules between iterations and short pauses for readability.",
     )
     parser.add_argument(
+        "--skip-model-check",
+        action="store_true",
+        help="Do not verify that the Ollama server is reachable or that DEV/QA models are installed.",
+    )
+    parser.add_argument(
         "-t",
         "--test",
         type=str,
@@ -463,11 +504,12 @@ def _build_parser() -> argparse.ArgumentParser:
 
 
 if __name__ == "__main__":
+    parser = _build_parser()
+    args = parser.parse_args()
+
     show_banner(PROJECT_NAME)
     start_background_logger(LOG_FILE, clear=True)
     try:
-        parser = _build_parser()
-        args = parser.parse_args()
         config = load_config(args.config)
         if args.preset:
             task = PRESET_TASKS[args.preset]
@@ -489,6 +531,11 @@ if __name__ == "__main__":
             max_iters_override=max_iters,
             demo_mode=demo_mode,
             html_report_path=html_report,
+        )
+        check_ollama_and_models(
+            hunter.dev_model,
+            hunter.qa_model,
+            skip=bool(getattr(args, "skip_model_check", False)),
         )
         preview = task[:60] + "..." if len(task) > 60 else task
         info(
